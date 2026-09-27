@@ -1,0 +1,73 @@
+name: Build Valid Micro APK
+
+on:
+
+  workflow_dispatch: # Allows you to manually trigger this from the GitHub UI
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Step 1: Set up a modern Java environment for build-tools
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      # Step 2: Install Android SDK Build Tools on the Ubuntu runner
+      - name: Install Android Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y android-sdk-build-tools
+
+      # Step 3: Write the minimal, valid AndroidManifest text block
+      - name: Generate Clean Android Manifest
+        run: |
+          cat << 'EOF' > AndroidManifest.xml
+          <manifest xmlns:android="http://android.com" package="com.payload.trigger">
+              <application android:hasCode="false" />
+          </manifest>
+          EOF
+
+      # Step 4: Compile the manifest into a structurally standard, uncorrupted binary package
+      - name: Compile Unsigned APK via AAPT
+        run: |
+          REAL_AAPT=$(find $ANDROID_HOME/build-tools -name "aapt" | sort -V | tail -n 1)
+          $REAL_AAPT package -f -M AndroidManifest.xml -F clean-unsigned.apk
+
+      # Step 5: Create a temporary, valid keystore pair for the apksigner utility
+      - name: Generate Temporary Keystore Certificate
+        run: |
+          keytool -genkey -v \
+            -keystore debug.keystore \
+            -storepass androidpass \
+            -alias androiddebugkey \
+            -keypass androidpass \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      # Step 6: Electronically sign the APK container so modern Android OS parsers accept it
+      - name: Apply Structural Cryptographic Signature
+        run: |
+          REAL_SIGNER=$(find $ANDROID_HOME/build-tools -name "apksigner" | sort -V | tail -n 1)
+          
+          $REAL_SIGNER sign \
+            --ks debug.keystore \
+            --ks-pass pass:androidpass \
+            --out clean-trigger.apk \
+            clean-unsigned.apk
+
+      # Step 7: Export the cleanly signed trigger APK
+      - name: Upload Valid Micro APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clean-trigger-apk
+          path: clean-trigger.apk
+          if-no-files-found: error
