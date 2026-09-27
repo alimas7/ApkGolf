@@ -26,28 +26,33 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y android-sdk-build-tools zip
 
-      # Step 1: Pack the data file into the root of the ZIP
-      - name: Assemble Unsigned Container
+      # Mirroring the project's exact file arrangement and compression sequence
+      - name: Replicate True Build Pipeline
         run: |
-          cp app/AndroidManifest.xml ./AndroidManifest.xml
-          zip -9 unsigned.apk AndroidManifest.xml
-
-      # Step 2: Use the exact override flag to bypass manifest validation errors
-      - name: Apply Stripped Cryptographic Signature
-        run: |
+          # 1. Recreate the precise workspace subdirectories
+          mkdir -p build/apk
+          cp app/AndroidManifest.xml build/apk/
+          
+          # 2. Package using the exact -j -r flags to strip out filesystem attribute bloat
+          zip -j -r build/app-unsigned.apk build/apk
+          
+          # 3. Locate the runner's real SDK path dynamically
           REAL_SIGNER=$(find $ANDROID_HOME/build-tools -name "apksigner" | sort -V | tail -n 1)
           
-          # Adding --min-sdk-version 26 strictly forces apksigner to stop parsing the manifest
+          # 4. Sign using the identical configuration strings and target min-sdk-version 24
           $REAL_SIGNER sign \
-            --min-sdk-version 26 \
             --v1-signing-enabled false \
             --v2-signing-enabled true \
             --v3-signing-enabled false \
             --v4-signing-enabled false \
             --key key.pk8 \
             --cert key.x509.pem \
-            --out signed-release.apk \
-            unsigned.apk
+            --in build/app-unsigned.apk \
+            --out build/signed-release.apk \
+            --min-sdk-version 24
+            
+          # 5. Bring the finished output to the root directory
+          cp build/signed-release.apk signed-release.apk
 
       - name: Upload Smallest APK Artifact
         uses: actions/upload-artifact@v4
