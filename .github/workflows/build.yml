@@ -15,38 +15,35 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up JDK 8
+      - name: Set up Java Environments
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '8' # Legacy build tools require an older Java environment to run without errors
+          java-version: |
+            8
+            17
 
-      # Force install the specific legacy 26.0.2 build tools package using sdkmanager
-      - name: Install Hardcoded Legacy Build Tools
+      - name: Install Legacy 26.0.2 Build Tools
         run: |
           sudo apt-get update
           sudo apt-get install -y zip
-          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;26.0.2"
+          JAVA_HOME=$JAVA_HOME_17_X64 $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;26.0.2"
 
-      # Replicate the original script precisely
-      - name: Replicate True Build Pipeline
+      - name: Assemble Unsigned Container
         run: |
           mkdir -p build/apk
           cp app/AndroidManifest.xml build/apk/
-          
-          # Pack the file without extra filesystem attribute records
           zip -j -r build/app-unsigned.apk build/apk
-          
-          # Force execute using the exact legacy 26.0.2 binary from the script
+
+      - name: Apply Legacy Cryptographic Signature
+        run: |
+          export JAVA_HOME=$JAVA_HOME_8_X64
           $ANDROID_HOME/build-tools/26.0.2/apksigner sign \
-            --v1-signing-enabled false \
+            --v2-signing-enabled true \
             --key key.pk8 \
             --cert key.x509.pem \
             --in build/app-unsigned.apk \
-            --out build/signed-release.apk \
-            --min-sdk-version 24
-            
-          cp build/signed-release.apk signed-release.apk
+            --out build/signed-release.apk
 
       - name: Upload Smallest APK Artifact
         uses: actions/upload-artifact@v4
