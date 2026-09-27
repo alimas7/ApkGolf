@@ -1,0 +1,42 @@
+name: Build and Minimize ApkGolf
+
+on:
+  workflow_dispatch: # Allows manual trigger from the Actions tab
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Check out the repository source code
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Java Environment (Needed for Android SDK tools like aapt/apksigner)
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      # Step 3: Install Android SDK Build Tools natively
+      - name: Setup Android SDK Build Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y android-sdk-build-tools zopfli
+
+      # Step 4: Ensure the built-in build script has execution permissions
+      - name: Grant Execute Permissions to Build Script
+        run: chmod +x build.sh
+
+      # Step 5: Execute the ApkGolf compilation script
+      - name: Run ApkGolf Build Script
+        run: ./build.sh
+
+      # Step 6: Persist and upload the compiled micro-APK as an Action Artifact
+      - name: Upload Smallest APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: smallest-apk-golf
+          path: signed-release.apk # The output filename defined in the repository
+          if-no-files-found: error
