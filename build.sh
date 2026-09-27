@@ -27,7 +27,7 @@ zip -j -r build/app-unsigned.apk build/apk
 recompress build/app-unsigned.apk
 
 echo "Signing archive"
-$ANDROID_HOME/build-tools/26.0.2/apksigner sign --v1-signing-enabled false --key key.pk8 --cert key.x509.pem --in build/app-unsigned.apk --out build/signed-release.apk --min-sdk-version 24
+apksigner sign --v1-signing-enabled false --key key.pk8 --cert key.x509.pem --in build/app-unsigned.apk --out build/signed-release.apk --min-sdk-version 24
 
 set +x
 
