@@ -15,43 +15,37 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up JDK 8
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '8' # Legacy build tools require an older Java environment to run without errors
 
-      - name: Install Build Dependencies
+      # Force install the specific legacy 26.0.2 build tools package using sdkmanager
+      - name: Install Hardcoded Legacy Build Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y android-sdk-build-tools zip
+          sudo apt-get install -y zip
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;26.0.2"
 
-      # Mirroring the project's exact file arrangement and compression sequence
+      # Replicate the original script precisely
       - name: Replicate True Build Pipeline
         run: |
-          # 1. Recreate the precise workspace subdirectories
           mkdir -p build/apk
           cp app/AndroidManifest.xml build/apk/
           
-          # 2. Package using the exact -j -r flags to strip out filesystem attribute bloat
+          # Pack the file without extra filesystem attribute records
           zip -j -r build/app-unsigned.apk build/apk
           
-          # 3. Locate the runner's real SDK path dynamically
-          REAL_SIGNER=$(find $ANDROID_HOME/build-tools -name "apksigner" | sort -V | tail -n 1)
-          
-          # 4. Sign using the identical configuration strings and target min-sdk-version 24
-          $REAL_SIGNER sign \
+          # Force execute using the exact legacy 26.0.2 binary from the script
+          $ANDROID_HOME/build-tools/26.0.2/apksigner sign \
             --v1-signing-enabled false \
-            --v2-signing-enabled true \
-            --v3-signing-enabled false \
-            --v4-signing-enabled false \
             --key key.pk8 \
             --cert key.x509.pem \
             --in build/app-unsigned.apk \
             --out build/signed-release.apk \
             --min-sdk-version 24
             
-          # 5. Bring the finished output to the root directory
           cp build/signed-release.apk signed-release.apk
 
       - name: Upload Smallest APK Artifact
