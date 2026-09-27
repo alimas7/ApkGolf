@@ -1,53 +1,60 @@
 name: Build and Minimize ApkGolf
 
 on:
-  workflow_dispatch: # Allows manual trigger from the Actions tab
+  push:
+    branches: [ "master", "main" ]
+  pull_request:
+    branches: [ "master", "main" ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Check out the repository source code
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Step 2: Set up Java Environment (Needed for Android SDK tools like aapt/apksigner)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      # Step 3: Install Android SDK Build Tools natively
-      - name: Setup Android SDK Build Tools
+      - name: Install Build Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y android-sdk-build-tools zopfli
 
-      # Step 4: Ensure the built-in build script has execution permissions
-      - name: Grant Execute Permissions to Build Script
-        run: chmod +x build.sh
-
-      # Step 5: Execute the ApkGolf compilation script
-      - name: Run ApkGolf Build Script
+      # STEP 1: Generate the unsigned app package using the runner's native tools
+      - name: Compile Unsigned APK Block
         run: |
-          REAL_SIGNER=$(find $ANDROID_HOME/build-tools -name "apksigner" | sort -V | tail -n 1)
+          # Dynamically map the latest aapt compiler tool
           REAL_AAPT=$(find $ANDROID_HOME/build-tools -name "aapt" | sort -V | tail -n 1)
           
-          # Replace the hardcoded binary paths
-          sed -i "s|/usr/local/lib/android/sdk/build-tools/26.0.2/apksigner|$REAL_SIGNER|g" build.sh
-          sed -i "s|/usr/local/lib/android/sdk/build-tools/26.0.2/aapt|$REAL_AAPT|g" build.sh
-          
-          # FORCE apksigner to drop modern bloat layers (v3, v4)
-          sed -i 's/apksigner sign/apksigner sign --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled false --v4-signing-enabled false/g' build.sh
-          
-          ./build.sh
+          # Force compile using the localized, hand-tuned AndroidManifest file
+          $REAL_AAPT package -f -M app/src/main/AndroidManifest.xml -F unsigned.apk
 
-      # Step 6: Persist and upload the compiled micro-APK as an Action Artifact
+      # STEP 2: Manually sign with the minimalist key, forcing signature downgrades
+      - name: Stripped Execution Signing
+        run: |
+          # Dynamically map the latest apksigner utility
+          REAL_SIGNER=$(find $ANDROID_HOME/build-tools -name "apksigner" | sort -V | tail -n 1)
+          
+          # Force drop modern metadata bloat (v1, v3, v4) to strictly isolate the hand-crafted v2 block
+          $REAL_SIGNER sign \
+            --v1-signing-enabled false \
+            --v2-signing-enabled true \
+            --v3-signing-enabled false \
+            --v4-signing-enabled false \
+            --key key.pk8 \
+            --cert key.x509.pem \
+            --out signed-release.apk \
+            unsigned.apk
+
       - name: Upload Smallest APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: smallest-apk-golf
-          path: signed-release.apk # The output filename defined in the repository
+          path: signed-release.apk
           if-no-files-found: error
