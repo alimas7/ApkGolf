@@ -15,36 +15,35 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # Step 1: Set up the correct JDK
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
+      # Step 2: Install absolute minimal dependencies
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y android-sdk-build-tools zopfli zip
+          sudo apt-get install -y android-sdk-build-tools zip
 
-      # STEP 1: Manually zip the pre-compiled binary manifest using zopfli
-      # This mirrors exactly how the original repository bundles the 678 byte archive
-      - name: Compress Unsigned APK with Zopfli
+      # Step 3: Package the pre-compiled binary manifest into a clean ZIP container
+      - name: Assemble Unsigned Container
         run: |
-          # Create a working copy of the pre-compiled binary manifest
+          # Copy the pre-compiled manifest into the working directory root
           cp app/AndroidManifest.xml ./AndroidManifest.xml
           
-          # Compress the file cleanly using high-compression zopfli
-          zopfli --zip AndroidManifest.xml
-          
-          # Rename the optimized archive container to a raw unsigned build layout
-          mv AndroidManifest.xml.zip unsigned.apk
+          # Create a completely clean zip file containing only the manifest
+          zip -9 unsigned.apk AndroidManifest.xml
 
-      # STEP 2: Manually sign with the minimalist key, forcing signature downgrades
-      - name: Stripped Execution Signing
+      # Step 4: Sign with the minimalistic keys and aggressively strip modern bloat
+      - name: Apply Stripped Cryptographic Signature
         run: |
+          # Dynamically capture the runner's built-in apksigner tool
           REAL_SIGNER=$(find $ANDROID_HOME/build-tools -name "apksigner" | sort -V | tail -n 1)
           
-          # Force drop modern metadata bloat (v1, v3, v4) to strictly isolate the hand-crafted v2 block
+          # Force drop modern metadata bloat blocks (v1, v3, v4) to isolate the tiny custom v2 footprint
           $REAL_SIGNER sign \
             --v1-signing-enabled false \
             --v2-signing-enabled true \
@@ -55,6 +54,7 @@ jobs:
             --out signed-release.apk \
             unsigned.apk
 
+      # Step 5: Save the minimal APK file output
       - name: Upload Smallest APK Artifact
         uses: actions/upload-artifact@v4
         with:
