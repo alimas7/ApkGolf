@@ -31,7 +31,18 @@ jobs:
 
       # Step 5: Execute the ApkGolf compilation script
       - name: Run ApkGolf Build Script
-        run: ./build.sh
+        run: |
+          REAL_SIGNER=$(find $ANDROID_HOME/build-tools -name "apksigner" | sort -V | tail -n 1)
+          REAL_AAPT=$(find $ANDROID_HOME/build-tools -name "aapt" | sort -V | tail -n 1)
+          
+          # Replace the hardcoded binary paths
+          sed -i "s|/usr/local/lib/android/sdk/build-tools/26.0.2/apksigner|$REAL_SIGNER|g" build.sh
+          sed -i "s|/usr/local/lib/android/sdk/build-tools/26.0.2/aapt|$REAL_AAPT|g" build.sh
+          
+          # FORCE apksigner to drop modern bloat layers (v3, v4)
+          sed -i 's/apksigner sign/apksigner sign --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled false --v4-signing-enabled false/g' build.sh
+          
+          ./build.sh
 
       # Step 6: Persist and upload the compiled micro-APK as an Action Artifact
       - name: Upload Smallest APK Artifact
