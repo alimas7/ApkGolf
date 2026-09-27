@@ -24,15 +24,20 @@ jobs:
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y android-sdk-build-tools zopfli
+          sudo apt-get install -y android-sdk-build-tools zopfli zip
 
-      # STEP 1: Generate the unsigned app package using the correct manifest path
-      - name: Compile Unsigned APK Block
+      # STEP 1: Manually zip the pre-compiled binary manifest using zopfli
+      # This mirrors exactly how the original repository bundles the 678 byte archive
+      - name: Compress Unsigned APK with Zopfli
         run: |
-          REAL_AAPT=$(find $ANDROID_HOME/build-tools -name "aapt" | sort -V | tail -n 1)
+          # Create a working copy of the pre-compiled binary manifest
+          cp app/AndroidManifest.xml ./AndroidManifest.xml
           
-          # Fixed path to point directly to app/AndroidManifest.xml
-          $REAL_AAPT package -f -M app/AndroidManifest.xml -F unsigned.apk
+          # Compress the file cleanly using high-compression zopfli
+          zopfli --zip AndroidManifest.xml
+          
+          # Rename the optimized archive container to a raw unsigned build layout
+          mv AndroidManifest.xml.zip unsigned.apk
 
       # STEP 2: Manually sign with the minimalist key, forcing signature downgrades
       - name: Stripped Execution Signing
