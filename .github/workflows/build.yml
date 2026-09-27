@@ -26,19 +26,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y android-sdk-build-tools zopfli
 
-      # STEP 1: Generate the unsigned app package using the runner's native tools
+      # STEP 1: Generate the unsigned app package using the correct manifest path
       - name: Compile Unsigned APK Block
         run: |
-          # Dynamically map the latest aapt compiler tool
           REAL_AAPT=$(find $ANDROID_HOME/build-tools -name "aapt" | sort -V | tail -n 1)
           
-          # Force compile using the localized, hand-tuned AndroidManifest file
-          $REAL_AAPT package -f -M app/src/main/AndroidManifest.xml -F unsigned.apk
+          # Fixed path to point directly to app/AndroidManifest.xml
+          $REAL_AAPT package -f -M app/AndroidManifest.xml -F unsigned.apk
 
       # STEP 2: Manually sign with the minimalist key, forcing signature downgrades
       - name: Stripped Execution Signing
         run: |
-          # Dynamically map the latest apksigner utility
           REAL_SIGNER=$(find $ANDROID_HOME/build-tools -name "apksigner" | sort -V | tail -n 1)
           
           # Force drop modern metadata bloat (v1, v3, v4) to strictly isolate the hand-crafted v2 block
